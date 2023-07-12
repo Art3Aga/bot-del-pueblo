@@ -1,3 +1,6 @@
+require('dotenv').config();
+
+
 const {
   Client,
   GatewayIntentBits,
@@ -8,12 +11,9 @@ const {
   SlashCommandBuilder,
   ActionRowBuilder,
   Events,
-  time,
 } = require("discord.js");
 
 const { OpenAIApi, Configuration } = require('openai');
-
-const { Player } = require('discord-player');
 
 // const sharp = require('sharp');
 
@@ -29,17 +29,13 @@ const client = new Client({
   partials: [Partials.Channel],
 });
 
-const player = new Player(client);
-// await player.extractors.loadDefault();
 
-
-const token =
-  "MTEyMTIxMTEyOTUyODU5NDQzMw.GwTSmU.KvvqecEmz82kb0YhRSfy3fp5aZ_21-60XSfhXQ";
+const token = process.env.TOKEN_DISCORD;
 
 const cron = require("node-cron");
 
 const configuration = new Configuration({
-  apiKey: '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',
+  apiKey: process.env.TOKEN_OPENAI,
 });
 
 const openaiClient = new OpenAIApi(configuration);
