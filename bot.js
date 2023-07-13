@@ -41,15 +41,15 @@ const configuration = new Configuration({
 const openaiClient = new OpenAIApi(configuration);
 
 
-let reminderMessage = `@everyone ¿A qué horas se juntarán para jugar partidas de League of Legends y perderlas?`;
+let reminderMessage = `@everyone ¿A qué horas se juntarán para perder partidas de LoL?`;
 let reminderCount = 0;
 
-const commands = [
-  { name: "saludar", description: "Saluda al usuario." },
-  { name: "informacion", description: "Muestra información del servidor." },
-  { name: "aiuda", description: "Muestra la lista de comandos disponibles." },
-  // Agrega más comandos aquí
-];
+let loadingMessageId = null;
+let loadingChannelId = '783098151933837314';
+
+let isProcessing = false;
+
+
 
 client.on("ready", () => {
   console.log(`Bot iniciado como ${client.user.tag}!`);
@@ -57,7 +57,7 @@ client.on("ready", () => {
     "783098151313473577",
     "783098151933837314",
     `${reminderMessage} Se los recordaré todos los días a las ${time12H()}!`,
-    "10 20 * * *"
+    "45 19 * * *"
   );
 
 });
@@ -65,9 +65,14 @@ client.on("ready", () => {
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return; // Ignorar mensajes de otros bots
 
+  if (isProcessing) {
+    message.reply(`Tranquilo ${message.author}, espera tu turno...`);
+    return;
+  }
+
   if (message.mentions.has(client.user)) {
     const user = message.author;
-    message.reply(`Hola, ${user}`);
+    message.reply(`Hola ${user}, en que puedo ayudarte?`);
   }
 
   if (message.content.startsWith("!")) {
@@ -86,53 +91,52 @@ client.on("messageCreate", async (message) => {
         message.reply('Lo siento, no entendí tu mensaje');
       })
     }
-    if(command == 'prime') {
-      const voiceChannel = message.member.voice.channel;
-      if (!voiceChannel) {
-        message.reply('Debes estar en un canal de voz.');
-        return;
-      }
-
-      // voiceChannel
-      // voiceChannel.join().then((connection) => {
-      //   const soundPath = 'assets/optimus-prime.mp3'; // Ruta al archivo de audio
-        
-      //   connection.play(soundPath, { volume: 15 }); // Reproducir el archivo de audio con un volumen de 0.5 (opcional)
-      // }).catch((error) => {
-      //   message.reply('No pude unirme al canal de voz :(');
-      //   console.error(`Error al unirse al canal de voz: ${error}`);
-      // });
-    }
-
     if (command == 'gpt') {
-      // await openaiClient.createImage
+      isProcessing = true;
+      const loading = await message.channel.send('Cargando...');
       const prompt = message.content.slice('!gpt'.length).trim();
-      const response = await openaiClient.createChatCompletion({
-        model: 'gpt-3.5-turbo',
-        max_tokens: 100,
-        n: 1,
-        messages: [
-          { role: 'user', content: prompt }
-        ],
-      });
-      message.channel.send(response.data.choices[0].message.content);
+      const response = await gpt(prompt);
+      loading.delete();
+      message.channel.send(`${message.author}, ${response}`);
+      isProcessing = false;
     }
 
     if (command == 'img') {
       const prompt = message.content.slice('!img'.length).trim();
-      const response = await openaiClient.createImage({
-        prompt: prompt,
-        n: 1,
-        response_format: 'url',
-        size: '512x512'
-      });
-      if (response.data.error) {
-        message.channel.send(response.data.error.message);
+      isProcessing = true;
+      const loading = await message.channel.send('Cargando...');
+      try {
+        const response = await openaiClient.createImage({
+          prompt: prompt,
+          n: 1,
+          response_format: 'url',
+          size: '256x256'
+        });
+        loading.delete();
+        message.channel.send(response.data.data[0].url);
+        isProcessing = false;
+      } catch (error) {
+        const response = await gpt(`Traduce esto: ${error.response.data.error.code}`);
+        loading.delete();
+        message.channel.send(`Sean serios: ${response}`);
+        isProcessing = false;
       }
-      message.channel.send(response.data.data[0].url);
     }
   }
 });
+
+
+async function gpt(prompt) {
+  const response = await openaiClient.createChatCompletion({
+    model: 'gpt-3.5-turbo',
+    max_tokens: 100,
+    n: 1,
+    messages: [
+      { role: 'user', content: prompt }
+    ],
+  });
+  return response.data.choices[0].message.content;
+}
 
 
 function time12H() {
@@ -290,19 +294,6 @@ async function listCommands(message) {
   }
 }
 
-// function mention() {
-//    // if (message.content.startsWith('!mencionar')) {
-//   //   const userId = '570808446073438230'; // Reemplaza 'ID_DEL_USUARIO' con el ID del usuario que deseas mencionar
-//   //   const user = message.guild.members.cache.get(userId);
-
-//   //   if (!user) {
-//   //     message.channel.send('No se pudo encontrar al usuario especificado.');
-//   //     return;
-//   //   }
-
-//   //   message.channel.send(`¡Mencionando a ${user}!`);
-//   // }
-// }
 
 function reminder(serverID, channelID, message, time) {
   cron.schedule(time, () => {
